@@ -6,7 +6,8 @@ module Display
   def intro
     puts "\t\t == Open for business 2.0 =="
     puts "If you've never played Mastermind,"
-    puts "it's a game where you have to guess your opponent's secret four digit code within a certain number of turns (like hangman with colored pegs)."
+    print "it's a game where you have to guess your opponent's secret four digit code within a certain number of turns "
+    puts '(like hangman with colored pegs).'
     puts 'Each turn you get some feedback about how good your guess was,'
     puts "whether it was exactly correct (\u25CF) or just the correct color but in the wrong space (\u25CB)."
   end
@@ -17,7 +18,7 @@ module Display
     puts 'Enter 1 or 2'
 
     loop do
-      case choice = gets.chomp
+      case gets.chomp
       when '1'
         return 'breaker'
       when '2'
@@ -62,6 +63,27 @@ module Display
 
     print "\n"
   end
+
+  def handle_win(breaker)
+    if breaker.instance_of?(Human)
+      puts 'You Win!'
+    else
+      puts 'You Lose!'
+    end
+  end
+
+  def handle_lose(breaker, code)
+    if breaker.instance_of?(Human)
+      puts 'You Lose!'
+      print 'The code is: '
+
+      show_code(code)
+
+      print "\n"
+    else
+      puts 'You Win!'
+    end
+  end
 end
 
 class Game
@@ -74,7 +96,7 @@ class Game
     @turn = 1
   end
 
-  def play
+  def create_game
     system('clear')
 
     intro
@@ -83,32 +105,7 @@ class Game
 
     self.code = players[:code_maker].get_code
 
-    loop do
-      play_turn
-
-      if clues.count(true) == 4
-        if players[:code_breaker].instance_of?(Human)
-          puts 'You Win!'
-        else
-          puts 'You Lose!'
-        end
-
-        break
-      elsif turn > 12
-        if players[:code_breaker].instance_of?(Human)
-          puts 'You Lose!'
-          print 'The code is: '
-
-          show_code(code)
-
-          print "\n"
-        else
-          puts 'You Win!'
-        end
-
-        break
-      end
-    end
+    play
 
     repeat
   end
@@ -116,6 +113,22 @@ class Game
   private
 
   attr_accessor :players, :code, :turn, :clues
+
+  def play
+    loop do
+      play_turn
+
+      if clues.count(true) == 4
+        handle_win(players[:code_breaker])
+
+        break
+      elsif turn > 12
+        handle_lose(players[:code_breaker], code)
+
+        break
+      end
+    end
+  end
 
   def get_players
     if get_choice == 'breaker'
@@ -132,11 +145,12 @@ class Game
 
     puts "Round #{turn}"
 
-    attempt = if player.instance_of?(Human)
-                player.get_code
-              else
-                player.break_code(clues, turn)
-              end
+    attempt =
+      if player.instance_of?(Human)
+        player.get_code
+      else
+        player.break_code(clues, turn)
+      end
 
     show_code(attempt)
 
@@ -152,16 +166,20 @@ class Game
     attempt.each_with_index do |number, index|
       next unless code_test.include?(number)
 
-      if number == code_test[index]
-        clues.unshift(true)
-      else
-        clues.push(false)
-      end
+      add_clue(number, code_test[index])
 
       code_test[code_test.index(number)] = '0'
     end
 
     clues
+  end
+
+  def add_clue(number1, number2)
+    if number1 == number2
+      clues.unshift(true)
+    else
+      clues.push(false)
+    end
   end
 
   def repeat
@@ -170,9 +188,9 @@ class Game
 
       case gets.chomp.downcase
       when 'y'
-        Game.new.play
+        Game.new.create_game
       when 'n'
-        return nil
+        exit
       else
         puts 'Error: Invalid Input'
       end
@@ -186,32 +204,31 @@ class Human
       print 'Enter code: '
 
       code = gets.chomp.split('')
-      bad_code = false
 
-      unless code.length == 4
-        puts 'Error: Code must be four digits.'
-
-        next
-      end
-
-      code.each_with_index do |number, _index|
-        next if Array('1'..'6').include?(number)
-
-        puts 'Error: Code must consist of numbers from 1 to 6.'
-
-        bad_code = true
-
-        break
-      end
-
-      return code unless bad_code
+      return code unless valid?(code)
     end
+  end
+
+  private
+
+  def valid?(code)
+    bad_code = false
+
+    code.each_with_index do |number, _index|
+      next if Array('1'..'6').include?(number) && code.length == 4
+
+      puts 'Error: Code must consist of four digits from 1 to 6.'
+
+      bad_code = true
+
+      break
+    end
+
+    bad_code
   end
 end
 
 class Computer
-  attr_accessor :code_set, :guess
-
   def initialize
     @code_set = []
 
@@ -224,6 +241,26 @@ class Computer
     code_set.sample.flatten
   end
 
+  def break_code(clues, turn)
+    return self.guess = code_set[7] if turn == 1
+
+    code_set.delete(guess)
+
+    if clues.empty?
+      filter_no_clues
+    else
+      filter_false_clues(clues)
+
+      filter_true_clues(clues) if clues.count(true).positive?
+    end
+
+    self.guess = code_set.sample
+  end
+
+  private
+
+  attr_accessor :code_set, :guess
+
   def generate_all_code
     123_456
       .to_s
@@ -231,56 +268,60 @@ class Computer
       .repeated_permutation(4) { |comb| code_set.push(comb) }
   end
 
-  def break_code(clues, turn)
-    temp = []
+  def filter_no_clues
+    code_set.filter! do |code|
+      good_code = true
 
-    return self.guess = code_set[0] if turn == 1
+      code.each do |number|
+        next unless guess.include?(number)
 
-    if clues.length != 4
-      temp = guess
-      self.guess = code_set[code_set.index(guess) + 259]
+        good_code = false
 
-      clues.length.times { |i| guess[i] = temp[i] }
-    else
-      code_set.delete(guess)
-
-      code_set.filter! do |code|
-        good_code = true
-        counter = 0
-        temp = guess.dup
-
-        code.each do |number|
-          if temp.include?(number)
-            counter += 1
-            temp.delete_at(temp.index(number))
-          end
-        end
-
-        good_code = false if counter != 4
-
-        good_code
+        break
       end
 
-      if clues.count(true).positive?
-        code_set.filter! do |code|
-          good_code = true
-          counter = 0
+      good_code
+    end
+  end
 
-          guess.each_with_index do |number, index|
-            counter += 1 if code.include?(number) && number == code[index]
-          end
+  def filter_false_clues(clues)
+    code_set.filter! do |code|
+      good_code = true
 
-          good_code = false if counter < clues.count(true)
+      good_code = false if filter_single_code(code) != clues.length
 
-          good_code
-        end
+      good_code
+    end
+  end
+
+  def filter_single_code(code)
+    counter = 0
+    temp = guess.dup
+
+    code.each do |number|
+      if temp.include?(number)
+        counter += 1
+        temp.delete_at(temp.index(number))
       end
-
-      self.guess = code_set[0]
     end
 
-    guess
+    counter
+  end
+
+  def filter_true_clues(clues)
+    code_set.filter! do |code|
+      good_code = true
+      counter = 0
+
+      guess.each_with_index do |number, index|
+        counter += 1 if code.include?(number) && number == code[index]
+      end
+
+      good_code = false if counter < clues.count(true)
+
+      good_code
+    end
   end
 end
 
-Game.new.play
+Game.new.create_game
