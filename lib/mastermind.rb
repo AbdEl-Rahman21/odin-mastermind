@@ -14,6 +14,7 @@ module Display
   def get_choice
     puts '1-Do you want to be a CodeBreaker.'
     puts '2-Or a CodeMaker.'
+    puts 'Enter 1 or 2'
 
     loop do
       case choice = gets.chomp
@@ -66,8 +67,6 @@ end
 class Game
   include Display
 
-  attr_accessor :players, :code, :turn, :clues
-
   def initialize
     @code = []
     @clues = []
@@ -76,26 +75,47 @@ class Game
   end
 
   def play
+    system('clear')
+
     intro
 
     get_players
 
-    p self.code = players[:code_maker].get_code
+    self.code = players[:code_maker].get_code
 
     loop do
       play_turn
 
-      if clues.length == 4 && clues.all?(true)
-        puts 'You Win!'
+      if clues.count(true) == 4
+        if players[:code_breaker].instance_of?(Human)
+          puts 'You Win!'
+        else
+          puts 'You Lose!'
+        end
 
         break
       elsif turn > 12
-        puts 'You Lose!'
+        if players[:code_breaker].instance_of?(Human)
+          puts 'You Lose!'
+          print 'The code is: '
+
+          show_code(code)
+
+          print "\n"
+        else
+          puts 'You Win!'
+        end
 
         break
       end
     end
+
+    repeat
   end
+
+  private
+
+  attr_accessor :players, :code, :turn, :clues
 
   def get_players
     if get_choice == 'breaker'
@@ -112,7 +132,11 @@ class Game
 
     puts "Round #{turn}"
 
-    attempt = player.get_code
+    attempt = if player.instance_of?(Human)
+                player.get_code
+              else
+                player.break_code(clues, turn)
+              end
 
     show_code(attempt)
 
@@ -123,18 +147,36 @@ class Game
 
   def check_code(attempt)
     self.clues = []
+    code_test = code.dup
 
-    code.each_with_index do |number, index|
-      if attempt.include?(number)
-        if attempt[index] == number
-          clues.unshift(true)
-        else
-          clues.push(false)
-        end
+    attempt.each_with_index do |number, index|
+      next unless code_test.include?(number)
+
+      if number == code_test[index]
+        clues.unshift(true)
+      else
+        clues.push(false)
       end
+
+      code_test[code_test.index(number)] = '0'
     end
 
     clues
+  end
+
+  def repeat
+    loop do
+      print 'Do you want to play again (Y\\N): '
+
+      case gets.chomp.downcase
+      when 'y'
+        Game.new.play
+      when 'n'
+        return nil
+      else
+        puts 'Error: Invalid Input'
+      end
+    end
   end
 end
 
@@ -168,8 +210,76 @@ class Human
 end
 
 class Computer
+  attr_accessor :code_set, :guess
+
+  def initialize
+    @code_set = []
+
+    generate_all_code
+
+    @guess = []
+  end
+
   def get_code
-    Array('1'..'6').sample(4, random: Random.new)
+    code_set.sample.flatten
+  end
+
+  def generate_all_code
+    123_456
+      .to_s
+      .split('')
+      .repeated_permutation(4) { |comb| code_set.push(comb) }
+  end
+
+  def break_code(clues, turn)
+    temp = []
+
+    return self.guess = code_set[0] if turn == 1
+
+    if clues.length != 4
+      temp = guess
+      self.guess = code_set[code_set.index(guess) + 259]
+
+      clues.length.times { |i| guess[i] = temp[i] }
+    else
+      code_set.delete(guess)
+
+      code_set.filter! do |code|
+        good_code = true
+        counter = 0
+        temp = guess.dup
+
+        code.each do |number|
+          if temp.include?(number)
+            counter += 1
+            temp.delete_at(temp.index(number))
+          end
+        end
+
+        good_code = false if counter != 4
+
+        good_code
+      end
+
+      if clues.count(true).positive?
+        code_set.filter! do |code|
+          good_code = true
+          counter = 0
+
+          guess.each_with_index do |number, index|
+            counter += 1 if code.include?(number) && number == code[index]
+          end
+
+          good_code = false if counter < clues.count(true)
+
+          good_code
+        end
+      end
+
+      self.guess = code_set[0]
+    end
+
+    guess
   end
 end
 
