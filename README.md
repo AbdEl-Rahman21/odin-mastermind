@@ -8,8 +8,9 @@ It is a game where you have to guess your opponent’s secret code within a cert
 
 ### Notes
 
-- The first 4 commits of this repository are copied form the (odin-OOP_Practice) to separate it form Mastermind
+- Todo: Refactor code & Improve Computer AI
+- The first 4 commits of this repository are copied form the (odin-OOP_Practice) to separate it form Tic Tac Toe
 
 ### Play
 
-[Play here]()
+[Play here](https://replit.com/@AbdEl-Rahman21/Mastermind)
