@@ -323,5 +323,3 @@ class Computer
     end
   end
 end
-
-Game.new.create_game
