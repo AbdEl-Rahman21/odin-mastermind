@@ -1,2 +1,25 @@
 language = "ruby"
 run = "ruby lib/main.rb"
+entrypoint = "main.rb"
+hidden = [".bundle"]
+
+[languages]
+
+[languages.ruby]
+pattern = "**/*.rb"
+
+[languages.ruby.languageServer]
+start = "solargraph stdio"
+
+[packager]
+language = "ruby"
+
+[packager.features]
+packageSearch = true
+guessImports = true
+
+[nix]
+channel = "stable-22_11"
+
+[gitHubImport]
+requiredFiles = [".replit", "replit.nix", "README.md"]
